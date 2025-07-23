@@ -1,132 +1,130 @@
-#include <stdio.h>
 #include "oslabs.h"
 
-// FIFO insert for RR
-void insert_at_end(struct PCB ready_queue[], int *queue_cnt, struct PCB new_process) {
-    ready_queue[*queue_cnt] = new_process;
-    (*queue_cnt)++;
-}
+struct RCB NULLRCB = {0, 0, 0, 0, 0};
 
-// Priority insert for PP
-void insert_by_priority(struct PCB ready_queue[], int *queue_cnt, struct PCB new_process) {
-    int i = *queue_cnt - 1;
-    while (i >= 0 && ready_queue[i].process_priority > new_process.process_priority) {
-        ready_queue[i + 1] = ready_queue[i];
-        i--;
-    }
-    ready_queue[i + 1] = new_process;
-    (*queue_cnt)++;
-}
-
-// Remaining time insert for SRTF
-void insert_by_remaining_time(struct PCB ready_queue[], int *queue_cnt, struct PCB new_process) {
-    int i = *queue_cnt - 1;
-    while (i >= 0 && ready_queue[i].remaining_bursttime > new_process.remaining_bursttime) {
-        ready_queue[i + 1] = ready_queue[i];
-        i--;
-    }
-    ready_queue[i + 1] = new_process;
-    (*queue_cnt)++;
-}
-
-// ---------- Priority Preemptive ----------
-
-struct PCB handle_process_arrival_pp(struct PCB ready_queue[], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp) {
-    new_process.remaining_bursttime = new_process.total_bursttime;
-    if (current_process.process_id == 0) {
-        new_process.execution_starttime = timestamp;
-        return new_process;
-    }
-    if (new_process.process_priority < current_process.process_priority) {
-        current_process.execution_endtime = timestamp;
-        insert_by_priority(ready_queue, queue_cnt, current_process);
-        new_process.execution_starttime = timestamp;
-        return new_process;
+struct RCB handle_request_arrival_fcfs(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
+    if (current_request.request_id == 0) {
+        return new_request;
     } else {
-        insert_by_priority(ready_queue, queue_cnt, new_process);
-        return current_process;
+        request_queue[*queue_cnt] = new_request;
+        (*queue_cnt)++;
+        return current_request;
     }
 }
 
-struct PCB handle_process_completion_pp(struct PCB ready_queue[], int *queue_cnt, int timestamp) {
+struct RCB handle_request_completion_fcfs(struct RCB request_queue[QUEUEMAX], int *queue_cnt) {
     if (*queue_cnt == 0) {
-        struct PCB null_process = {0};
-        return null_process;
-    }
-    struct PCB next = ready_queue[0];
-    for (int i = 0; i < *queue_cnt - 1; i++) {
-        ready_queue[i] = ready_queue[i + 1];
-    }
-    (*queue_cnt)--;
-    next.execution_starttime = timestamp;
-    next.execution_endtime = timestamp + next.remaining_bursttime;
-    return next;
-}
-
-// ---------- Shortest Remaining Time Preemptive ----------
-
-struct PCB handle_process_arrival_srtp(struct PCB ready_queue[], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp) {
-    new_process.remaining_bursttime = new_process.total_bursttime;
-
-    if (current_process.process_id == 0) {
-        new_process.execution_starttime = timestamp;
-        return new_process;
+        return NULLRCB;
     }
 
-    int executed_time = timestamp - current_process.execution_starttime;
-    current_process.remaining_bursttime -= executed_time;
-
-    if (new_process.remaining_bursttime < current_process.remaining_bursttime) {
-        current_process.execution_endtime = timestamp;
-        insert_by_remaining_time(ready_queue, queue_cnt, current_process);
-        new_process.execution_starttime = timestamp;
-        return new_process;
-    } else {
-        insert_by_remaining_time(ready_queue, queue_cnt, new_process);
-        return current_process;
+    int earliest_index = 0;
+    for (int i = 1; i < *queue_cnt; i++) {
+        if (request_queue[i].arrival_timestamp < request_queue[earliest_index].arrival_timestamp) {
+            earliest_index = i;
+        }
     }
-}
 
-struct PCB handle_process_completion_srtp(struct PCB ready_queue[], int *queue_cnt, int timestamp) {
-    if (*queue_cnt == 0) {
-        struct PCB null_process = {0};
-        return null_process;
-    }
-    struct PCB next = ready_queue[0];
-    for (int i = 0; i < *queue_cnt - 1; i++) {
-        ready_queue[i] = ready_queue[i + 1];
-    }
-    (*queue_cnt)--;
-    next.execution_starttime = timestamp;
-    next.execution_endtime = timestamp + next.remaining_bursttime;
-    return next;
-}
+    struct RCB next_request = request_queue[earliest_index];
 
-// ---------- Round Robin ----------
-
-struct PCB handle_process_arrival_rr(struct PCB ready_queue[], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp, int time_quantum) {
-    new_process.remaining_bursttime = new_process.total_bursttime;
-
-    if (current_process.process_id == 0) {
-        new_process.execution_starttime = timestamp;
-        return new_process;
-    } else {
-        insert_at_end(ready_queue, queue_cnt, new_process);
-        return current_process;
-    }
-}
-
-struct PCB handle_process_completion_rr(struct PCB ready_queue[], int *queue_cnt, int timestamp, int time_quantum) {
-    if (*queue_cnt == 0) {
-        struct PCB null_process = {0};
-        return null_process;
-    }
-    struct PCB next = ready_queue[0];
-    for (int i = 0; i < *queue_cnt - 1; i++) {
-        ready_queue[i] = ready_queue[i + 1];
+    for (int i = earliest_index; i < *queue_cnt - 1; i++) {
+        request_queue[i] = request_queue[i + 1];
     }
     (*queue_cnt)--;
 
-    next.execution_starttime = timestamp;
-    return next;
+    return next_request;
+}
+
+struct RCB handle_request_arrival_sstf(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
+    if (current_request.request_id == 0) {
+        return new_request;
+    } else {
+        request_queue[*queue_cnt] = new_request;
+        (*queue_cnt)++;
+        return current_request;
+    }
+}
+
+struct RCB handle_request_completion_sstf(struct RCB request_queue[QUEUEMAX], int *queue_cnt, int current_cylinder) {
+    if (*queue_cnt == 0) {
+        return NULLRCB;
+    }
+
+    int selected_index = 0;
+    int min_seek = abs(request_queue[0].cylinder - current_cylinder);
+
+    for (int i = 1; i < *queue_cnt; i++) {
+        int seek_time = abs(request_queue[i].cylinder - current_cylinder);
+        if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
+            min_seek = seek_time;
+            selected_index = i;
+        }
+    }
+
+    struct RCB next_request = request_queue[selected_index];
+
+    for (int i = selected_index; i < *queue_cnt - 1; i++) {
+        request_queue[i] = request_queue[i + 1];
+    }
+    (*queue_cnt)--;
+
+    return next_request;
+}
+
+struct RCB handle_request_arrival_look(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
+    if (current_request.request_id == 0) {
+        return new_request;
+    } else {
+        request_queue[*queue_cnt] = new_request;
+        (*queue_cnt)++;
+        return current_request;
+    }
+}
+
+struct RCB handle_request_completion_look(struct RCB request_queue[QUEUEMAX], int *queue_cnt, int current_cylinder, int scan_direction) {
+    if (*queue_cnt == 0) {
+        return NULLRCB;
+    }
+
+    int selected_index = -1;
+    int min_seek = 1 << 30;
+
+    for (int i = 0; i < *queue_cnt; i++) {
+        if (request_queue[i].cylinder == current_cylinder) {
+            if (selected_index == -1 || request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp) {
+                selected_index = i;
+            }
+        }
+    }
+
+    if (selected_index == -1) {
+        for (int i = 0; i < *queue_cnt; i++) {
+            int direction_ok = (scan_direction == 1 && request_queue[i].cylinder > current_cylinder) || (scan_direction == 0 && request_queue[i].cylinder < current_cylinder);
+            if (direction_ok) {
+                int seek_time = abs(request_queue[i].cylinder - current_cylinder);
+                if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
+                    selected_index = i;
+                    min_seek = seek_time;
+                }
+            }
+        }
+    }
+
+    if (selected_index == -1) {
+        for (int i = 0; i < *queue_cnt; i++) {
+            int seek_time = abs(request_queue[i].cylinder - current_cylinder);
+            if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
+                selected_index = i;
+                min_seek = seek_time;
+            }
+        }
+    }
+
+    struct RCB next_request = request_queue[selected_index];
+
+    for (int i = selected_index; i < *queue_cnt - 1; i++) {
+        request_queue[i] = request_queue[i + 1];
+    }
+    (*queue_cnt)--;
+
+    return next_request;
 }
