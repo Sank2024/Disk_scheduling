@@ -1,0 +1,4 @@
+test_disk.exe
+*.o
+*.exe
+*.vscode
