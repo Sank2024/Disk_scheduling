@@ -1,130 +1,153 @@
+
 #include "oslabs.h"
+#include <stdlib.h>
 
-struct RCB NULLRCB = {0, 0, 0, 0, 0};
+// Helper function to initialize a NULLPCB
+struct PCB null_pcb() {
+    struct PCB null = {0, 0, 0, 0, 0, 0, 0};
+    return null;
+}
 
-struct RCB handle_request_arrival_fcfs(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
-    if (current_request.request_id == 0) {
-        return new_request;
-    } else {
-        request_queue[*queue_cnt] = new_request;
+// Priority Scheduling: Handle process arrival
+struct PCB handle_process_arrival_pp(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp) {
+    // If no current process (NULLPCB), execute the new process
+    if (current_process.process_id == 0) {
+        new_process.execution_starttime = timestamp;
+        new_process.execution_endtime = timestamp + new_process.total_bursttime;
+        new_process.remaining_bursttime = new_process.total_bursttime;
+        return new_process;
+    }
+    // If current process exists, compare priorities
+    if (new_process.process_priority > current_process.process_priority) {
+        // Preempt current process: add it back to the queue
+        current_process.remaining_bursttime = current_process.total_bursttime - (timestamp - current_process.execution_starttime);
+        ready_queue[*queue_cnt] = current_process;
         (*queue_cnt)++;
-        return current_request;
+        // Execute new process
+        new_process.execution_starttime = timestamp;
+        new_process.execution_endtime = timestamp + new_process.total_bursttime;
+        new_process.remaining_bursttime = new_process.total_bursttime;
+        return new_process;
+    } else {
+        // Add new process to the queue
+        ready_queue[*queue_cnt] = new_process;
+        (*queue_cnt)++;
+        return current_process;
     }
 }
 
-struct RCB handle_request_completion_fcfs(struct RCB request_queue[QUEUEMAX], int *queue_cnt) {
+// Priority Scheduling: Handle process completion
+struct PCB handle_process_completion_pp(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, int timestamp) {
     if (*queue_cnt == 0) {
-        return NULLRCB;
+        return null_pcb();
     }
-
-    int earliest_index = 0;
+    // Find the process with the highest priority
+    int max_priority_index = 0;
+    int max_priority = ready_queue[0].process_priority;
     for (int i = 1; i < *queue_cnt; i++) {
-        if (request_queue[i].arrival_timestamp < request_queue[earliest_index].arrival_timestamp) {
-            earliest_index = i;
+        if (ready_queue[i].process_priority > max_priority) {
+            max_priority = ready_queue[i].process_priority;
+            max_priority_index = i;
         }
     }
-
-    struct RCB next_request = request_queue[earliest_index];
-
-    for (int i = earliest_index; i < *queue_cnt - 1; i++) {
-        request_queue[i] = request_queue[i + 1];
+    // Select the process
+    struct PCB next_process = ready_queue[max_priority_index];
+    // Remove from queue
+    for (int i = max_priority_index; i < *queue_cnt - 1; i++) {
+        ready_queue[i] = ready_queue[i + 1];
     }
     (*queue_cnt)--;
-
-    return next_request;
+    // Set execution times
+    next_process.execution_starttime = timestamp;
+    next_process.execution_endtime = timestamp + next_process.remaining_bursttime;
+    return next_process;
 }
 
-struct RCB handle_request_arrival_sstf(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
-    if (current_request.request_id == 0) {
-        return new_request;
-    } else {
-        request_queue[*queue_cnt] = new_request;
+// Shortest Remaining Time Next: Handle process arrival
+struct PCB handle_process_arrival_srtp(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp) {
+    // If no current process (NULLPCB), execute the new process
+    if (current_process.process_id == 0) {
+        new_process.execution_starttime = timestamp;
+        new_process.execution_endtime = timestamp + new_process.total_bursttime;
+        new_process.remaining_bursttime = new_process.total_bursttime;
+        return new_process;
+    }
+    // Calculate remaining time of current process
+    int current_remaining = current_process.remaining_bursttime - (timestamp - current_process.execution_starttime);
+    if (new_process.total_bursttime < current_remaining) {
+        // Preempt current process: add it back to the queue
+        current_process.remaining_bursttime = current_remaining;
+        ready_queue[*queue_cnt] = current_process;
         (*queue_cnt)++;
-        return current_request;
+        // Execute new process
+        new_process.execution_starttime = timestamp;
+        new_process.execution_endtime = timestamp + new_process.total_bursttime;
+        new_process.remaining_bursttime = new_process.total_bursttime;
+        return new_process;
+    } else {
+        // Add new process to the queue
+        ready_queue[*queue_cnt] = new_process;
+        (*queue_cnt)++;
+        return current_process;
     }
 }
 
-struct RCB handle_request_completion_sstf(struct RCB request_queue[QUEUEMAX], int *queue_cnt, int current_cylinder) {
+// Shortest Remaining Time Next: Handle process completion
+struct PCB handle_process_completion_srtp(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, int timestamp) {
     if (*queue_cnt == 0) {
-        return NULLRCB;
+        return null_pcb();
     }
-
-    int selected_index = 0;
-    int min_seek = abs(request_queue[0].cylinder - current_cylinder);
-
+    // Find the process with the shortest remaining burst time
+    int min_remaining_index = 0;
+    int min_remaining_time = ready_queue[0].remaining_bursttime;
     for (int i = 1; i < *queue_cnt; i++) {
-        int seek_time = abs(request_queue[i].cylinder - current_cylinder);
-        if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
-            min_seek = seek_time;
-            selected_index = i;
+        if (ready_queue[i].remaining_bursttime < min_remaining_time) {
+            min_remaining_time = ready_queue[i].remaining_bursttime;
+            min_remaining_index = i;
         }
     }
-
-    struct RCB next_request = request_queue[selected_index];
-
-    for (int i = selected_index; i < *queue_cnt - 1; i++) {
-        request_queue[i] = request_queue[i + 1];
+    // Select the process
+    struct PCB next_process = ready_queue[min_remaining_index];
+    // Remove from queue
+    for (int i = min_remaining_index; i < *queue_cnt - 1; i++) {
+        ready_queue[i] = ready_queue[i + 1];
     }
     (*queue_cnt)--;
-
-    return next_request;
+    // Set execution times
+    next_process.execution_starttime = timestamp;
+    next_process.execution_endtime = timestamp + next_process.remaining_bursttime;
+    return next_process;
 }
 
-struct RCB handle_request_arrival_look(struct RCB request_queue[QUEUEMAX], int *queue_cnt, struct RCB current_request, struct RCB new_request, int timestamp) {
-    if (current_request.request_id == 0) {
-        return new_request;
-    } else {
-        request_queue[*queue_cnt] = new_request;
-        (*queue_cnt)++;
-        return current_request;
+// Round-Robin: Handle process arrival
+struct PCB handle_process_arrival_rr(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, struct PCB current_process, struct PCB new_process, int timestamp, int time_quantum) {
+    // If no current process (NULLPCB), execute the new process
+    if (current_process.process_id == 0) {
+        new_process.execution_starttime = timestamp;
+        new_process.execution_endtime = timestamp + MIN(new_process.total_bursttime, time_quantum);
+        new_process.remaining_bursttime = new_process.total_bursttime;
+        return new_process;
     }
+    // Add new process to the queue (no preemption in RR on arrival)
+    ready_queue[*queue_cnt] = new_process;
+    (*queue_cnt)++;
+    return current_process;
 }
 
-struct RCB handle_request_completion_look(struct RCB request_queue[QUEUEMAX], int *queue_cnt, int current_cylinder, int scan_direction) {
+// Round-Robin: Handle process completion
+struct PCB handle_process_completion_rr(struct PCB ready_queue[QUEUEMAX], int *queue_cnt, int timestamp, int time_quantum) {
     if (*queue_cnt == 0) {
-        return NULLRCB;
+        return null_pcb();
     }
-
-    int selected_index = -1;
-    int min_seek = 1 << 30;
-
-    for (int i = 0; i < *queue_cnt; i++) {
-        if (request_queue[i].cylinder == current_cylinder) {
-            if (selected_index == -1 || request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp) {
-                selected_index = i;
-            }
-        }
-    }
-
-    if (selected_index == -1) {
-        for (int i = 0; i < *queue_cnt; i++) {
-            int direction_ok = (scan_direction == 1 && request_queue[i].cylinder > current_cylinder) || (scan_direction == 0 && request_queue[i].cylinder < current_cylinder);
-            if (direction_ok) {
-                int seek_time = abs(request_queue[i].cylinder - current_cylinder);
-                if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
-                    selected_index = i;
-                    min_seek = seek_time;
-                }
-            }
-        }
-    }
-
-    if (selected_index == -1) {
-        for (int i = 0; i < *queue_cnt; i++) {
-            int seek_time = abs(request_queue[i].cylinder - current_cylinder);
-            if (seek_time < min_seek || (seek_time == min_seek && request_queue[i].arrival_timestamp < request_queue[selected_index].arrival_timestamp)) {
-                selected_index = i;
-                min_seek = seek_time;
-            }
-        }
-    }
-
-    struct RCB next_request = request_queue[selected_index];
-
-    for (int i = selected_index; i < *queue_cnt - 1; i++) {
-        request_queue[i] = request_queue[i + 1];
+    // Select the first process in the queue (FIFO)
+    struct PCB next_process = ready_queue[0];
+    // Remove from queue
+    for (int i = 0; i < *queue_cnt - 1; i++) {
+        ready_queue[i] = ready_queue[i + 1];
     }
     (*queue_cnt)--;
-
-    return next_request;
+    // Set execution times
+    next_process.execution_starttime = timestamp;
+    next_process.execution_endtime = timestamp + MIN(next_process.remaining_bursttime, time_quantum);
+    return next_process;
 }
