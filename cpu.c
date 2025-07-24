@@ -18,9 +18,8 @@ struct PCB handle_process_arrival_pp(struct PCB ready_queue[QUEUEMAX], int *queu
         if (current_process.execution_starttime > 0) {
             current_process.remaining_bursttime -= (timestamp - current_process.execution_starttime);
         }
-        current_process.execution_starttime = 0;
-        current_process.execution_endtime = 0;
-        ready_queue[*queue_cnt] = current_process;
+        current_process.execution_endtime = 0; // Set EET to 0 when queued
+        ready_queue[*queue_cnt] = current_process; // Preserve EST
         (*queue_cnt)++;
         new_process.execution_starttime = timestamp;
         new_process.execution_endtime = timestamp + new_process.remaining_bursttime;
