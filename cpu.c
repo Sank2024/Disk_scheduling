@@ -12,7 +12,12 @@ struct PCB handle_process_arrival_pp(struct PCB ready_queue[QUEUEMAX], int *queu
         new_process.execution_endtime = timestamp + new_process.remaining_bursttime;
         return new_process;
     }
-    if (new_process.process_priority > current_process.process_priority) {
+    // Lower priority value means higher priority
+    if (new_process.process_priority < current_process.process_priority) {
+        // Update current process's remaining_bursttime
+        if (current_process.execution_starttime > 0) {
+            current_process.remaining_bursttime -= (timestamp - current_process.execution_starttime);
+        }
         current_process.execution_starttime = 0;
         current_process.execution_endtime = 0;
         ready_queue[*queue_cnt] = current_process;
@@ -33,19 +38,20 @@ struct PCB handle_process_completion_pp(struct PCB ready_queue[QUEUEMAX], int *q
     if (*queue_cnt == 0) {
         return null_pcb();
     }
-    int max_priority_index = 0;
-    int max_priority = ready_queue[0].process_priority;
+    // Select process with lowest priority value (highest priority)
+    int min_priority_index = 0;
+    int min_priority = ready_queue[0].process_priority;
     int min_arrival_time = ready_queue[0].arrival_timestamp;
     for (int i = 1; i < *queue_cnt; i++) {
-        if (ready_queue[i].process_priority > max_priority ||
-            (ready_queue[i].process_priority == max_priority && ready_queue[i].arrival_timestamp < min_arrival_time)) {
-            max_priority = ready_queue[i].process_priority;
-            max_priority_index = i;
+        if (ready_queue[i].process_priority < min_priority ||
+            (ready_queue[i].process_priority == min_priority && ready_queue[i].arrival_timestamp < min_arrival_time)) {
+            min_priority = ready_queue[i].process_priority;
+            min_priority_index = i;
             min_arrival_time = ready_queue[i].arrival_timestamp;
         }
     }
-    struct PCB next_process = ready_queue[max_priority_index];
-    for (int i = max_priority_index; i < *queue_cnt - 1; i++) {
+    struct PCB next_process = ready_queue[min_priority_index];
+    for (int i = min_priority_index; i < *queue_cnt - 1; i++) {
         ready_queue[i] = ready_queue[i + 1];
     }
     (*queue_cnt)--;
@@ -62,6 +68,10 @@ struct PCB handle_process_arrival_srtp(struct PCB ready_queue[QUEUEMAX], int *qu
     }
     if (new_process.remaining_bursttime < current_process.remaining_bursttime ||
         (new_process.remaining_bursttime == current_process.remaining_bursttime && new_process.arrival_timestamp < current_process.arrival_timestamp)) {
+        // Update current process's remaining_bursttime
+        if (current_process.execution_starttime > 0) {
+            current_process.remaining_bursttime -= (timestamp - current_process.execution_starttime);
+        }
         current_process.execution_starttime = 0;
         current_process.execution_endtime = 0;
         ready_queue[*queue_cnt] = current_process;
@@ -124,8 +134,17 @@ struct PCB handle_process_completion_rr(struct PCB ready_queue[QUEUEMAX], int *q
     if (*queue_cnt == 0) {
         return null_pcb();
     }
-    struct PCB next_process = ready_queue[0];
-    for (int i = 0; i < *queue_cnt - 1; i++) {
+    // Select process with earliest arrival_timestamp
+    int min_arrival_index = 0;
+    int min_arrival_time = ready_queue[0].arrival_timestamp;
+    for (int i = 1; i < *queue_cnt; i++) {
+        if (ready_queue[i].arrival_timestamp < min_arrival_time) {
+            min_arrival_time = ready_queue[i].arrival_timestamp;
+            min_arrival_index = i;
+        }
+    }
+    struct PCB next_process = ready_queue[min_arrival_index];
+    for (int i = min_arrival_index; i < *queue_cnt - 1; i++) {
         ready_queue[i] = ready_queue[i + 1];
     }
     (*queue_cnt)--;
